@@ -1,2 +1,3 @@
 data/word2vec_model
 data/data_pickle
+data/tf_lstm_model
