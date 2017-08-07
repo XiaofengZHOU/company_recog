@@ -129,7 +129,7 @@ def label_3(tag):
 
 
 
-def pickle_file_without_padding(model_file_name,input_file_folder,output_file_name,startfile,endfile,capital=True):
+def pickle_file_without_padding(model_file_name,input_file_folder,output_file_name,startfile,endfile,capital=True,num_class=2):
     model = gensim.models.Word2Vec.load(model_file_name)
     train_data = []
     train_label = []
@@ -172,7 +172,10 @@ def pickle_file_without_padding(model_file_name,input_file_folder,output_file_na
                     pos_embedding = pos(pos_tag)
                     chunk_embedding = chunk(chunk_tag)
                     capital_embedding = capital_in_word(word)
-                    label_embedding = label_2(label_tag)
+                    if num_class ==2:
+                        label_embedding = label_2(label_tag)
+                    elif num_class ==3:
+                        label_embedding = label_3(label_tag)
                     embedding = np.append(word_embedding,pos_embedding)
                     embedding = np.append(embedding,chunk_embedding)
                     embedding = np.append(embedding,capital_embedding)
@@ -190,7 +193,7 @@ def pickle_file_without_padding(model_file_name,input_file_folder,output_file_na
 
 #%%
 word2vec_model_path = 'data/word2vec_model/article_model'
-pickle_file_without_padding(word2vec_model_path,'data/conll_format_txt/','data/pickle_file/train_sentences_without_padding.pickle',0,850)
-pickle_file_without_padding(word2vec_model_path,'data/conll_format_txt/','data/pickle_file/test_sentences_without_padding.pickle',850,934)
+pickle_file_without_padding(word2vec_model_path,'data/conll_format_text/length30_correct/','data/data_pickle/num_class=2/train_sentences_cap.pickle',0,850)
+pickle_file_without_padding(word2vec_model_path,'data/conll_format_text/length30_correct/','data/data_pickle/num_class=2/test_sentences_cap.pickle',850,934)
 
 

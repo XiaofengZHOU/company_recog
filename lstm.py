@@ -23,9 +23,9 @@ def get_data(file_name):
     return data,label
 
 
-train_data, train_label = get_data('data/pickle_file/train_sentences_without_padding.pickle')
-test_data , test_label  = get_data('data/pickle_file/test_sentences_without_padding.pickle')
-test_data2 , test_label2  = get_data('data/pickle_file/test_sentences_without_padding.pickle')
+train_data, train_label = get_data('data/data_pickle/num_class=2/train_sentences_cap.pickle')
+test_data , test_label  = get_data('data/data_pickle/num_class=2/test_sentences_cap.pickle')
+test_data2 , test_label2  = get_data('data/data_pickle/num_class=2/test_sentences_cap.pickle')
 
 max_length_train = get_max_length(train_data)
 max_length_test  = get_max_length(test_data)
@@ -79,6 +79,16 @@ def get_sentence_length(sequence):
 
 def get_cost(prediction,label):
     cross_entropy = label * tf.log(prediction)
+    cross_entropy = -1 * tf.reduce_sum(cross_entropy, reduction_indices=2)
+    mask = tf.sign(tf.reduce_max(tf.abs(label), reduction_indices=2))
+    cross_entropy *= mask
+    cross_entropy = tf.reduce_sum(cross_entropy, reduction_indices=1)
+    cross_entropy /= tf.reduce_sum(mask, reduction_indices=1)
+    return tf.reduce_mean(cross_entropy)
+
+def get_cost_enforce_entity(prediction,label):
+    enforce = np.array([1,100])
+    cross_entropy = enforce*label * tf.log(prediction)
     cross_entropy = -1 * tf.reduce_sum(cross_entropy, reduction_indices=2)
     mask = tf.sign(tf.reduce_max(tf.abs(label), reduction_indices=2))
     cross_entropy *= mask
@@ -189,7 +199,7 @@ with tf.Session() as sess:
 
 
 
-
+#%%
 
 def get_matrix_from_text(model_file_name,conll_text_name,capital=True):
     model = gensim.models.Word2Vec.load(model_file_name)
