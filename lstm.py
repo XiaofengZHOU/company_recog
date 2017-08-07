@@ -25,6 +25,7 @@ def get_data(file_name):
 
 train_data, train_label = get_data('data/pickle_file/train_sentences_without_padding.pickle')
 test_data , test_label  = get_data('data/pickle_file/test_sentences_without_padding.pickle')
+test_data2 , test_label2  = get_data('data/pickle_file/test_sentences_without_padding.pickle')
 
 max_length_train = get_max_length(train_data)
 max_length_test  = get_max_length(test_data)
@@ -144,6 +145,7 @@ def get_entity_accuracy(prediction,label):
     return result_mat
 
 
+
 #%%
 outputs = BiRnn(x,n_hidden)
 pred = tf.nn.softmax( tf.matmul(outputs, weights) + biases )
@@ -179,3 +181,104 @@ with tf.Session() as sess:
                     "{:.6f}".format(loss) + ", Training Accuracy= " + \
                     "{:.5f}".format(acc))
         saver.save(sess,'tf_model/model.ckpt')
+        test_data_padding,test_label_padding = generate_test_data(test_data,test_label,max_length)
+        pr = sess.run(pred,feed_dict={x: test_data_padding, y: test_label_padding})
+        li = get_entity_accuracy(pr,test_label2).astype(int)
+        print(e,li)
+
+
+
+
+
+
+def get_matrix_from_text(model_file_name,conll_text_name,capital=True):
+    model = gensim.models.Word2Vec.load(model_file_name)
+    f = open(conll_text_name,'r')
+    lines = f.readlines()
+    f.close()
+    text_data = []
+    train_data = []
+    train_label = []
+
+    text_sentence = []
+    sentence = []
+    sentence_label = []
+    for line in lines:   
+        if 'SP SPACE' in line :
+            continue      
+        if line in ['\n', '\r\n'] :
+            if len(sentence) != 0:
+                text_data.append(text_sentence)
+                train_data.append(np.array(sentence))
+                train_label.append(np.array(sentence_label))
+                sentence = []
+                sentence_label = []
+                text_sentence = []
+            else:
+                continue
+            
+        else:
+            try:
+                assert (len(line.split()) == 4)
+            except:
+                continue
+            line = line.split()
+            word = line[0]
+            pos_tag = line[1]
+            chunk_tag = line[2]
+            label_tag = line[3]
+            try:
+                if capital == True:
+                    word_embedding = model.wv[word]
+                else:
+                    word_embedding = model.wv[word.lower()]
+                pos_embedding = pos(pos_tag)
+                chunk_embedding = chunk(chunk_tag)
+                capital_embedding = capital_in_word(word)
+                label_embedding = label_2(label_tag)
+                embedding = np.append(word_embedding,pos_embedding)
+                embedding = np.append(embedding,chunk_embedding)
+                embedding = np.append(embedding,capital_embedding)
+                text_sentence.append(word)
+                sentence.append(embedding)
+                sentence_label.append(label_embedding)
+            except:
+                print(line)
+    return train_data,train_label,text_data
+
+word2vec_model_path = 'data/word2vec_model/article_model_len30_correct_noCapital'
+conll_file_path = 'data/review/length30_correct/'
+tf_model_path = 'data/tf_model/len30_correct_no_capital/model_length30_noCapital.ckpt'
+output_file_path = 'data/tf_model/len30_correct_no_capital/result_review/'
+
+with tf.Session() as sess:
+    saver.restore(sess, tf_model_path)
+    conll_files = os.listdir(conll_file_path)
+
+    for conll_file_name in conll_files:
+        review_data,review_label,review_text = get_matrix_from_text(word2vec_model_path,conll_file_path + conll_file_name)
+        review_data_padding,review_label_padding = generate_test_data(review_data,review_label,max_length)
+        pr = sess.run(pred,feed_dict={x: review_data_padding, y: review_label_padding})
+
+        res_file = open(output_file_path+conll_file_name+'.txt','w+')
+        for idx1,sentence in enumerate(review_text):
+            sent = []
+            label_sent=False
+            for idx2,word in enumerate(sentence):
+                label = np.argmax(review_label_padding[idx1][idx2])
+                pred_word = np.argmax(pr[idx1][idx2])
+                result_word = pr[idx1][idx2]
+                line = []
+                line.append(word.ljust(20))
+                line.append(str(label))
+                line.append(str(pred_word))
+                line.append(str(result_word).ljust(40))
+                if pred_word != label:
+                    line.append('*****')
+                    label_sent = True
+                sent.append(line)
+            if label_sent == True:
+                for item in sent:
+                    res_file.write('  '.join(item)+'\n')
+                res_file.write('\n')
+        res_file.close()

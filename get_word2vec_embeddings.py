@@ -26,7 +26,6 @@ def test(folder_name) :
                 except:
                     print(file_name,idx,line)
 
-#test('data/conll_format_txt/')
 
 def find_max_length_sentence(folder_name):
     max_length = 0
@@ -48,7 +47,6 @@ def find_max_length_sentence(folder_name):
             else:
                 temp_len += 1
     return max_length
-#find_max_length_sentence('data/conll_format_txt/')
 
 
 def pos(tag):
@@ -119,8 +117,19 @@ def label_2(tag):
         one_hot[1] =1
     return one_hot
 
+def label_3(tag):
+    one_hot = np.zeros(3)
+    if tag.endswith('O'):
+        one_hot[0] =1
+    elif 's' in tag:
+        one_hot[1] =1
+    else:
+        one_hot[2] =1
+    return one_hot
 
-def pickle_file_without_padding(model_file_name,input_file_folder,output_file_name,startfile,endfile):
+
+
+def pickle_file_without_padding(model_file_name,input_file_folder,output_file_name,startfile,endfile,capital=True):
     model = gensim.models.Word2Vec.load(model_file_name)
     train_data = []
     train_label = []
@@ -156,7 +165,10 @@ def pickle_file_without_padding(model_file_name,input_file_folder,output_file_na
                 chunk_tag = line[2]
                 label_tag = line[3]
                 try:
-                    word_embedding = model.wv[word.lower()]
+                    if capital == True:
+                        word_embedding = model.wv[word]
+                    else:
+                        word_embedding = model.wv[word.lower()]
                     pos_embedding = pos(pos_tag)
                     chunk_embedding = chunk(chunk_tag)
                     capital_embedding = capital_in_word(word)

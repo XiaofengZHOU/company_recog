@@ -21,11 +21,8 @@ def generate_gensim_train_text(input_file_folder,output_file_name):
     output_file.close()
 
 
-
-
-
 #%%
-input_file_folder = 'data/conll_format_txt/'
-output_file_name = 'data/gensim_word2vec_to_train/gensim.txt'
+input_file_folder = 'data/conll_format_text/length30_correct/'
+output_file_name = 'data/gensim_sentence_train/gensim.txt'
 generate_gensim_train_text(input_file_folder,output_file_name)
 
