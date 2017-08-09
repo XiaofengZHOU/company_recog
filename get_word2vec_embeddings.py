@@ -129,7 +129,7 @@ def label_3(tag):
 
 
 
-def pickle_file_without_padding(model_file_name,input_file_folder,output_file_name,startfile,endfile,capital=True):
+def pickle_file_without_padding(model_file_name,input_file_folder,output_file_name,startfile,endfile,capital=True,num_class=2):
     model = gensim.models.Word2Vec.load(model_file_name)
     train_data = []
     train_label = []
@@ -172,7 +172,10 @@ def pickle_file_without_padding(model_file_name,input_file_folder,output_file_na
                     pos_embedding = pos(pos_tag)
                     chunk_embedding = chunk(chunk_tag)
                     capital_embedding = capital_in_word(word)
-                    label_embedding = label_2(label_tag)
+                    if num_class == 2:
+                        label_embedding = label_2(label_tag)
+                    elif num_class == 3:
+                        label_embedding = label_3(label_tag)
                     embedding = np.append(word_embedding,pos_embedding)
                     embedding = np.append(embedding,chunk_embedding)
                     embedding = np.append(embedding,capital_embedding)
@@ -187,6 +190,15 @@ def pickle_file_without_padding(model_file_name,input_file_folder,output_file_na
     pickle.dump(data,f,pickle.HIGHEST_PROTOCOL)
     f.close()
 
+def generate_test_data(data,embedding_size,num_class,length):
+    for i in range(len(data)):
+        if len(data[i]) < length:
+            padding_word = np.array([0 for _ in range(embedding_size)])
+            padding_label = np.array([0 for _ in range(num_class)])
+            padding_words = np.array([padding_word   for _ in range(length-len(data[i]))])
+            padding_labels = np.array([padding_label for _ in range(length-len(data[i]))])
+            data[i]  = np.concatenate( (data[i],padding_words),  axis=0 )
+    return data
 
 #%%
 word2vec_model_path = 'data/word2vec_model/article_model'
