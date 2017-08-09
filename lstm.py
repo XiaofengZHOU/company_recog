@@ -23,9 +23,9 @@ def get_data(file_name):
     return data,label
 
 
-train_data, train_label = get_data('data/pickle_file/train_sentences_without_padding.pickle')
-test_data , test_label  = get_data('data/pickle_file/test_sentences_without_padding.pickle')
-test_data2 , test_label2  = get_data('data/pickle_file/test_sentences_without_padding.pickle')
+train_data, train_label = get_data('data/data_pickle/num_class=2/train_sentences_cap.pickle')
+test_data , test_label  = get_data('data/data_pickle/num_class=2/test_sentences_cap.pickle')
+test_data2 , test_label2  = get_data('data/data_pickle/num_class=2/test_sentences_cap.pickle')
 
 max_length_train = get_max_length(train_data)
 max_length_test  = get_max_length(test_data)
@@ -47,8 +47,40 @@ display_step =10
 x = tf.placeholder("float", [None, n_steps, embedding_size])
 y = tf.placeholder("float", [None, n_steps, n_classes])
 # RNN output node weights and biases
-weights = tf.Variable(tf.random_normal([n_hidden*2, n_classes],stddev=0.01))
-biases =  tf.Variable(tf.random_normal([n_classes]))
+
+n_hidden = 512
+n_hidden_1 = 256
+n_hidden_2 =64
+weights = {
+    'h1': tf.Variable(tf.random_normal([n_hidden*2, n_hidden_1],stddev=0.01)),
+    'h2': tf.Variable(tf.random_normal([n_hidden_1, n_hidden_2],stddev=0.01)),
+    'out': tf.Variable(tf.random_normal([n_hidden_2, n_classes],stddev=0.01)),
+    'h' : tf.Variable(tf.random_normal([n_hidden*2, n_classes],stddev=0.01))
+}
+biases = {
+    'b1': tf.Variable(tf.random_normal([n_hidden_1])),
+    'b2': tf.Variable(tf.random_normal([n_hidden_2])),
+    'out': tf.Variable(tf.random_normal([n_classes])),
+    'b' : tf.Variable(tf.random_normal([n_classes]))
+}
+
+def monolayer_perceptron(x,weights,biases):
+    out_layer = tf.matmul(x, weights['h']) + biases['b']
+    return out_layer
+
+
+def multilayer_perceptron(x, weights, biases):
+    # Hidden layer with RELU activation
+    layer_1 = tf.add(tf.matmul(x, weights['h1']), biases['b1'])
+    layer_1 = tf.nn.relu(layer_1)
+    layer_1 = tf.nn.dropout(layer_1,0.5)
+    # Hidden layer with RELU activation
+    layer_2 = tf.add(tf.matmul(layer_1, weights['h2']), biases['b2'])
+    layer_2 = tf.nn.relu(layer_2)
+    layer_2 = tf.nn.dropout(layer_2,0.8)
+    # Output layer with linear activation
+    out_layer = tf.matmul(layer_2, weights['out']) + biases['out']
+    return out_layer
 
 def lstm_cell(n_hidden):
     # With the latest TensorFlow source code (as of Mar 27, 2017),
@@ -79,6 +111,16 @@ def get_sentence_length(sequence):
 
 def get_cost(prediction,label):
     cross_entropy = label * tf.log(prediction)
+    cross_entropy = -1 * tf.reduce_sum(cross_entropy, reduction_indices=2)
+    mask = tf.sign(tf.reduce_max(tf.abs(label), reduction_indices=2))
+    cross_entropy *= mask
+    cross_entropy = tf.reduce_sum(cross_entropy, reduction_indices=1)
+    cross_entropy /= tf.reduce_sum(mask, reduction_indices=1)
+    return tf.reduce_mean(cross_entropy)
+
+def get_cost_enforce_entity(prediction,label):
+    enforce = np.array([1,100])
+    cross_entropy = enforce*label * tf.log(prediction)
     cross_entropy = -1 * tf.reduce_sum(cross_entropy, reduction_indices=2)
     mask = tf.sign(tf.reduce_max(tf.abs(label), reduction_indices=2))
     cross_entropy *= mask
@@ -125,8 +167,8 @@ def generate_batch(data,label,length,offset,endset):
 def generate_test_data(data,label,length):
     for i in range(len(data)):
         if len(data[i]) < length:
-            padding_word = np.array([0 for _ in range(311)])
-            padding_label = np.array([0 for _ in range(5)])
+            padding_word = np.array([0 for _ in range(embedding_size)])
+            padding_label = np.array([0 for _ in range(n_classes)])
             padding_words = np.array([padding_word   for _ in range(length-len(data[i]))])
             padding_labels = np.array([padding_label for _ in range(length-len(data[i]))])
             data[i]  = np.concatenate( (data[i],padding_words),  axis=0 )
@@ -148,7 +190,8 @@ def get_entity_accuracy(prediction,label):
 
 #%%
 outputs = BiRnn(x,n_hidden)
-pred = tf.nn.softmax( tf.matmul(outputs, weights) + biases )
+pred = monolayer_perceptron(outputs,weights,biases)
+pred = tf.nn.softmax(pred)
 pred = tf.reshape(pred, [-1, n_steps, n_classes])
 cost = get_cost(pred,y)
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
@@ -159,10 +202,11 @@ saver = tf.train.Saver()
 
 
 #%%
+tf_model_path = 'data/tf_lstm_model/num_class=2/model/model.ckpt'
 with tf.Session() as sess:
     sess.run(init)
     num_iters = len(train_data)//batch_size
-    num_epochs = 15
+    num_epochs = 20
     print('variable initialized')
     print('num of iters: ', num_iters)
     offset = 0
@@ -180,16 +224,29 @@ with tf.Session() as sess:
                 print("Iter " + str(i) + ", Minibatch Loss= " + \
                     "{:.6f}".format(loss) + ", Training Accuracy= " + \
                     "{:.5f}".format(acc))
-        saver.save(sess,'tf_model/model.ckpt')
+        saver.save(sess,tf_model_path)
         test_data_padding,test_label_padding = generate_test_data(test_data,test_label,max_length)
         pr = sess.run(pred,feed_dict={x: test_data_padding, y: test_label_padding})
         li = get_entity_accuracy(pr,test_label2).astype(int)
         print(e,li)
 
 
+#%%
+for i in range(len(test_data)):
+    print(test_data_padding[i].shape,test_label_padding[i].shape)
+
+#%%
+tf_model_path = 'data/tf_lstm_model/num_class=2/model/model.ckpt'
+with tf.Session() as sess:
+    saver.restore(sess, tf_model_path)
+    test_data_padding,test_label_padding = generate_test_data(test_data,test_label,max_length)
+    pr = sess.run(pred,feed_dict={x: test_data_padding, y: test_label_padding})
+    li = get_entity_accuracy(pr,test_label2).astype(int)
+    print(li)
 
 
 
+#%%
 
 def get_matrix_from_text(model_file_name,conll_text_name,capital=True):
     model = gensim.models.Word2Vec.load(model_file_name)
@@ -282,3 +339,5 @@ with tf.Session() as sess:
                     res_file.write('  '.join(item)+'\n')
                 res_file.write('\n')
         res_file.close()
+
+
