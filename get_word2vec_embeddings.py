@@ -202,7 +202,7 @@ def generate_test_data(data,embedding_size,num_class,length):
 
 #%%
 word2vec_model_path = 'data/word2vec_model/article_model'
-pickle_file_without_padding(word2vec_model_path,'data/conll_format_text/length30_correct/','data/data_pickle/num_class=2/train_sentences_cap.pickle',0,850)
-pickle_file_without_padding(word2vec_model_path,'data/conll_format_text/length30_correct/','data/data_pickle/num_class=2/test_sentences_cap.pickle',850,934)
+pickle_file_without_padding(word2vec_model_path,'data/conll_format_text/length30_correct/','data/data_pickle/num_class=2/train_sentences_cap.pickle',0,800)
+pickle_file_without_padding(word2vec_model_path,'data/conll_format_text/length30_correct/','data/data_pickle/num_class=2/test_sentences_cap.pickle',800,934)
 
 

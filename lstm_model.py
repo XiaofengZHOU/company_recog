@@ -1,5 +1,8 @@
+#%%
 import tensorflow as tf
 from tensorflow.contrib import rnn
+import numpy as np 
+import pickle
 
 class LSTM_Model:
     def __init__(self,input_data):
@@ -12,18 +15,25 @@ class LSTM_Model:
         self.learning_rate = 0.001
         self.keep_prob = 0.5
 
-        self.tf_model_path = ''
-        self.saver = tf.train.Saver()
+        self.tf_model_path = 'data/tf_lstm_model/num_class=2/model/model.ckpt'
+        self.sess = tf.Session()
         self.x = tf.placeholder("float", [None, self.n_steps, self.embedding_size])
         self.y = tf.placeholder("float", [None, self.n_steps, self.n_classes])
         self.weights = tf.Variable(tf.random_normal([self.n_hidden*2, self.n_classes],stddev=0.01))
         self.biases =  tf.Variable(tf.random_normal([self.n_classes]))
         self.input_data = input_data
 
+    def monolayer_perceptron(self,x):
+        out_layer = tf.matmul(x, self.weights) + self.biases
+        return out_layer
+
     def creat_model(self):
         outputs = self.BiRnn()
-        self.pred = tf.nn.softmax( tf.matmul(outputs, self.weights) + self.biases )
+        self.pred = self.monolayer_perceptron(outputs)
+        self.pred = tf.nn.softmax(self.pred)
         self.pred = tf.reshape(self.pred, [-1, self.n_steps, self.n_classes])
+
+        self.saver = tf.train.Saver()
 
     def lstm_cell(self):
         # With the latest TensorFlow source code (as of Mar 27, 2017),
@@ -57,7 +67,47 @@ class LSTM_Model:
         return tf.reduce_mean(cross_entropy)
 
     def get_pred(self):
-        with tf.Session() as sess:
-            self.saver.restore(sess, self.tf_model_path)
-            pr = sess.run(self.pred,feed_dict={x: review_data_padding})
+        self.saver.restore(self.sess, self.tf_model_path)
+        pr = self.sess.run(self.pred,feed_dict={x: self.input_data})
         return pr
+
+    
+
+#%%
+f = open('data/temp/temp.pickle','rb')
+data = pickle.load(f)
+f.close()
+input_data = data['train_data']
+text = data['text']
+
+#%%
+lstm1 = LSTM_Model(input_data)
+lstm1.creat_model()
+pr = lstm1.get_pred()
+
+#%%
+with tf.Session() as sess:
+    new_saver = tf.train.import_meta_graph( 'data/tf_lstm_model/num_class=2/model/model.meta')
+    new_saver.restore(sess, 'data/tf_lstm_model/num_class=2/model/model.ckpt')
+    pred = tf.get_collection("pred")[0]
+    x = tf.get_collection("x")[0]
+    pr = sess.run(pred,feed_dict={x: input_data})
+
+#%%
+res_file = open('data/temp/result.txt','w+')
+for idx1,sentence in enumerate(text):
+    sent = []
+    label_sent=True
+    for idx2,word in enumerate(sentence):
+        pred_word = np.argmax(pr[idx1][idx2])
+        result_word = pr[idx1][idx2]
+        line = []
+        line.append(word.ljust(20))
+        line.append(str(pred_word))
+        line.append(str(result_word).ljust(40))
+        sent.append(line)
+    if label_sent == True:
+        for item in sent:
+            res_file.write('  '.join(item)+'\n')
+        res_file.write('\n')
+res_file.close()

@@ -193,13 +193,14 @@ outputs = BiRnn(x,n_hidden)
 pred = monolayer_perceptron(outputs,weights,biases)
 pred = tf.nn.softmax(pred)
 pred = tf.reshape(pred, [-1, n_steps, n_classes])
+tf.add_to_collection("pred", pred)
+tf.add_to_collection("x", x)
 cost = get_cost(pred,y)
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)
 accuracy = get_accuracy(pred,y)
 
 init = tf.global_variables_initializer()
 saver = tf.train.Saver()
-
 
 #%%
 tf_model_path = 'data/tf_lstm_model/num_class=2/model/model.ckpt'
@@ -231,14 +232,13 @@ with tf.Session() as sess:
         print(e,li)
 
 
-#%%
-for i in range(len(test_data)):
-    print(test_data_padding[i].shape,test_label_padding[i].shape)
 
 #%%
 tf_model_path = 'data/tf_lstm_model/num_class=2/model/model.ckpt'
 with tf.Session() as sess:
     saver.restore(sess, tf_model_path)
+    saver.save(sess, tf_model_path)
+    saver.export_meta_graph('data/tf_lstm_model/num_class=2/model/model.meta')
     test_data_padding,test_label_padding = generate_test_data(test_data,test_label,max_length)
     pr = sess.run(pred,feed_dict={x: test_data_padding, y: test_label_padding})
     li = get_entity_accuracy(pr,test_label2).astype(int)
@@ -303,10 +303,10 @@ def get_matrix_from_text(model_file_name,conll_text_name,capital=True):
                 print(line)
     return train_data,train_label,text_data
 
-word2vec_model_path = 'data/word2vec_model/article_model_len30_correct_noCapital'
-conll_file_path = 'data/review/length30_correct/'
-tf_model_path = 'data/tf_model/len30_correct_no_capital/model_length30_noCapital.ckpt'
-output_file_path = 'data/tf_model/len30_correct_no_capital/result_review/'
+word2vec_model_path = 'data/word2vec_model/article_model'
+conll_file_path = 'data/conll_format_text/length30_correct/'
+tf_model_path = 'data/tf_lstm_model/num_class=2/model/model.ckpt'
+output_file_path = 'data/tf_lstm_model/num_class=2/review_total/'
 
 with tf.Session() as sess:
     saver.restore(sess, tf_model_path)
@@ -320,7 +320,7 @@ with tf.Session() as sess:
         res_file = open(output_file_path+conll_file_name+'.txt','w+')
         for idx1,sentence in enumerate(review_text):
             sent = []
-            label_sent=False
+            label_sent=True
             for idx2,word in enumerate(sentence):
                 label = np.argmax(review_label_padding[idx1][idx2])
                 pred_word = np.argmax(pr[idx1][idx2])

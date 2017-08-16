@@ -1,3 +1,7 @@
-data/word2vec_model
+data/word2vec_model/*
+!data/word2vec_model/article_model
+
 data/data_pickle
-data/tf_lstm_model
+
+data/tf_lstm_model/num_class=2/*
+!data/tf_lstm_model/num_class=2/model

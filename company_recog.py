@@ -1,9 +1,12 @@
 #%%
+import tensorflow as tf
 import spacy 
 import json
 import numpy as np
 import gensim
-
+import pickle
+import logging
+logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 nlp = spacy.load('en')
 
 class MySentences(object):
@@ -57,9 +60,12 @@ def text_conll_format(input_text_file_name,out_put_file_name,max_length=30):
 
             puncs_idx = [] 
             for idx,word in enumerate(sent):
-                if word.text in [',','?','.','!'] and idx<=94:
+                if word.text in [',','?','.','!',';'] and idx<=94:
                     puncs_idx.append(idx)
-            max_punc_idx = max(puncs_idx)
+            try:
+                max_punc_idx = max(puncs_idx)
+            except:
+                continue
             multi_sentences.append(sent[0:max_punc_idx])
             write_to_file(multi_sentences,out_put_file)
             multi_sentences = []
@@ -103,11 +109,10 @@ def text_conll_format(input_text_file_name,out_put_file_name,max_length=30):
                 total = total + num_words
     print(total)
 
-def generate_gensim_train_sentence(conll_file_name,output_file_name):
+def generate_gensim_train_sentence(conll_file_name):
     f = open(conll_file_name,'r')
     lines = f.readlines()
-    f.close()
-    output_file = open(output_file_name,'w+')   
+    f.close()   
     sentence = [] 
     for line in lines:
         try:
@@ -116,16 +121,36 @@ def generate_gensim_train_sentence(conll_file_name,output_file_name):
             sentence.append(word)
         except:
             pass
-    output_file.write(' '.join(sentence)+'\n')
-    output_file.close()
+    return ' '.join(sentence)+'\n'
+    
 
-def train_gensim_word2vec_with_new_sentence(gensim_model_name):
-    new_sentence = MySentences('data/temp/gensim_train.txt',capital=True)
-    model = gensim.models.Word2Vec.load(gensim_model_name)
-    model.build_vocab(new_sentence,update=True)
-    model.intersect_word2vec_format('data/word2vec_model/GoogleNews-vectors-negative300.bin', binary=True)    
-    model.train(new_sentence,total_examples = 1,epochs=10)
-    model.save(gensim_model_name)
+def train_gensim_word2vec_with_new_sentence(gensim_model_name,gensim_train_name):
+    f = open(gensim_train_name,'r')
+    num_sentences = len(f.readlines())
+    f.close()
+    del f
+    if num_sentences >0:
+        new_sentence = MySentences(gensim_train_name,capital=True)
+        model = gensim.models.Word2Vec.load(gensim_model_name)
+        model.build_vocab(new_sentence,update=True)
+        model.intersect_word2vec_format('data/word2vec_model/GoogleNews-vectors-negative300.bin', binary=True)    
+        model.train(new_sentence,total_examples = num_sentences,epochs=10)
+        model.save(gensim_model_name)
+
+def add_all_untrained_articles_to_gensim_file(json_file_name,text_file_name,conll_file_name,gensim_train_name):
+    output_file = open(gensim_train_name,'w+')
+    raw_articles = get_raw_articles(json_file_name)
+    for article in raw_articles:
+        if 'tf_companies' not in article.keys():
+            text = article['content']
+            generate_text_file(text,text_file_name)
+            text_conll_format(text_file_name,conll_file_name)
+            sentence =  generate_gensim_train_sentence(conll_file_name)
+            output_file.write(sentence)
+            article['gensim'] = '2'
+    output_file.close()
+    save_raw_articles(json_file_name,raw_articles)
+
 
 def label_2(tag):
     one_hot = np.zeros(2)
@@ -227,10 +252,84 @@ def get_word2vec_embeddings(gensim_model_name,conll_file_name,capital = True):
                 print(line)
     return train_data,text_data
 
+def generate_test_data(data,embedding_size=312,n_classes=2,length=94):
+    for i in range(len(data)):
+        if len(data[i]) < length:
+            padding_word = np.array([0 for _ in range(embedding_size)])
+            padding_words = np.array([padding_word   for _ in range(length-len(data[i]))])
+            data[i]  = np.concatenate( (data[i],padding_words),  axis=0 )
+    return data
+
+def get_company(pr,text):
+    company = []
+    for idx1,sentence in enumerate(text):
+        sent = []
+        label_sent=True
+        company_name = []
+        for idx2,word in enumerate(sentence):         
+            pred_word = np.argmax(pr[idx1][idx2])
+            if pred_word == 1 and pr[idx1][idx2][1]>0.6:
+                company_name.append(word)
+            else:
+                if len(company_name) != 0:
+                    if ' '.join(company_name) not in company:
+                        company.append(' '.join(company_name))
+                    company_name = []
+    return company
+
+def generate_text_file(text,text_file_name):
+    f = open(text_file_name,'w+')
+    f.write(text)
+    f.close()
 
 
+def get_raw_articles(json_file_name):
+    f = open(json_file_name,'r')
+    raw_articles = json.load(f)
+    f.close()
+    return raw_articles
 
+def save_raw_articles(json_file_name,raw_articles):
+    f = open(json_file_name,'w')
+    json.dump(raw_articles, f,indent = 2)
+    f.close()
+       
 #%%
-#text_conll_format('data/temp/temp.txt','data/temp/temp_conll.txt')
-#generate_gensim_train_sentence('data/temp/temp_conll.txt','data/temp/gensim_train.txt')
+if __name__ == "__main__":
+    gensim_model_name = 'data/word2vec_model/article_model'
+    text_file_name = 'data/temp/temp.txt'
+    conll_file_name = 'data/temp/temp_conll.txt'
+    gensim_train_name = 'data/temp/gensim_train.txt'
+    json_file_name = 'data/raw_articles.json'
+    add_all_untrained_articles_to_gensim_file(json_file_name,text_file_name,conll_file_name,gensim_train_name)
+    train_gensim_word2vec_with_new_sentence(gensim_model_name,gensim_train_name)
+
+    with tf.Session() as sess:
+        new_saver = tf.train.import_meta_graph( 'data/tf_lstm_model/num_class=2/model/model.meta')
+        new_saver.restore(sess, 'data/tf_lstm_model/num_class=2/model/model.ckpt')
+        pred = tf.get_collection("pred")[0]
+        x = tf.get_collection("x")[0]
+
+        raw_articles = get_raw_articles(json_file_name)
+        for idx,article in enumerate(raw_articles):
+            if 'tf_companies' in article.keys():
+                print('skip')
+                continue
+            else:
+                text = article['content']
+                generate_text_file(text,text_file_name)
+                text_conll_format(text_file_name,conll_file_name)
+                input_data,text_data = get_word2vec_embeddings(gensim_model_name,conll_file_name)
+                input_data = generate_test_data(input_data)   
+                
+                try:
+                    pr = sess.run(pred,feed_dict={x: input_data})
+                    company = get_company(pr,text_data)
+                    article['tf_companies'] = company
+                    print(company)
+                except:
+                    pass
+
+            if idx%10 == 0:
+                save_raw_articles(json_file_name,raw_articles)
 
